@@ -30,10 +30,6 @@ pip install -r requirements.txt
 # Ubuntu/Debian
 sudo apt-get install ffmpeg
 
-# macOS
-brew install ffmpeg
-```
-
 3. Run the server:
 ```bash
 uvicorn backend.main:app --reload
