@@ -390,6 +390,10 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
     }
     
     isPlaying = true;
+    // Update button text to "Pause"
+    if (elements.btnPlayPause) {
+      elements.btnPlayPause.textContent = 'Pause';
+    }
     if (updateHUD) updateHUD();
   }
   
@@ -406,6 +410,10 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
     }
     
     isPlaying = false;
+    // Update button text to "Play"
+    if (elements.btnPlayPause) {
+      elements.btnPlayPause.textContent = 'Play';
+    }
     if (updateHUD) updateHUD();
   }
   
@@ -428,14 +436,27 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       window.isSeeking = true;
       
       // Pause video first to prevent timeupdate during seek
+      // Also ensure isPlaying is false for prev/next operations
       const wasPlaying = !video.paused && isPlaying;
       if (wasPlaying) {
         video.pause();
       }
+      // Ensure video is paused and isPlaying is false
+      if (!video.paused) {
+        video.pause();
+      }
+      isPlaying = false;
       
       // Update frame immediately before seeking
       currentFrame = targetFrame;
       sharedState.frameIndex = targetFrame;
+      
+      // Update button text to "Play" before seeking (we're paused during seek)
+      // This is especially important for prev/next operations
+      if (elements.btnPlayPause) {
+        elements.btnPlayPause.textContent = 'Play';
+      }
+      
       if (updateHUD) updateHUD();
       
       // Seek to target time
@@ -469,9 +490,19 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
         sharedState.frameIndex = finalFrame;
       }
       
-      // Restore playing state if it was playing
+      // Don't restore playing state if isPlaying is false (like after prev/next)
+      // Only restore if explicitly playing AND isPlaying flag is still true
       if (wasPlaying && isPlaying) {
         video.play().catch(e => console.error('[FAVP] Error resuming playback:', e));
+      }
+      
+      // Ensure button text is "Play" after seek if we're paused (isPlaying is false)
+      if (elements.btnPlayPause) {
+        if (!isPlaying) {
+          elements.btnPlayPause.textContent = 'Play';
+        } else {
+          elements.btnPlayPause.textContent = 'Pause';
+        }
       }
       
       if (updateHUD) updateHUD();
@@ -494,8 +525,42 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
     
     const nextFrame = Math.min(currentFrame + 1, totalFrames - 1);
     if (nextFrame > currentFrame) {
+      // Pause first if playing
+      const wasPlaying = video && !video.paused;
+      if (wasPlaying) {
+        // Pause video and update state
+        if (video) video.pause();
+        isPlaying = false;
+        sendCommand('pause');
+      }
+      // Always set isPlaying to false for next/prev operations
+      isPlaying = false;
+      
+      // Force button text to "Play" IMMEDIATELY - must be done before setFrame
+      const btn = elements.btnPlayPause;
+      if (btn) {
+        btn.textContent = 'Play';
+      }
+      
+      // Then seek to next frame
       sendCommand('next_frame');
-      setFrame(nextFrame);
+      setFrame(nextFrame).then(() => {
+        // Force button text to "Play" after seek completes
+        // Use setTimeout to ensure it runs after any HUD updates
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 0);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 50);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 100);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 200);
+        if (updateHUD) updateHUD();
+      });
     }
   }
   
@@ -507,8 +572,42 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
     
     const prevFrame = Math.max(currentFrame - 1, 0);
     if (prevFrame < currentFrame) {
+      // Pause first if playing
+      const wasPlaying = video && !video.paused;
+      if (wasPlaying) {
+        // Pause video and update state
+        if (video) video.pause();
+        isPlaying = false;
+        sendCommand('pause');
+      }
+      // Always set isPlaying to false for next/prev operations
+      isPlaying = false;
+      
+      // Force button text to "Play" IMMEDIATELY - must be done before setFrame
+      const btn = elements.btnPlayPause;
+      if (btn) {
+        btn.textContent = 'Play';
+      }
+      
+      // Then seek to previous frame
       sendCommand('prev_frame');
-      setFrame(prevFrame);
+      setFrame(prevFrame).then(() => {
+        // Force button text to "Play" after seek completes
+        // Use setTimeout to ensure it runs after any HUD updates
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 0);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 50);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 100);
+        setTimeout(() => {
+          if (btn) btn.textContent = 'Play';
+        }, 200);
+        if (updateHUD) updateHUD();
+      });
     }
   }
   
