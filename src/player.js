@@ -59,18 +59,26 @@ function updateHUD() {
   
   // Calculate timecode based on frame index if available (WebSocket mode or exact mode), or video currentTime otherwise
   let timecodeSeconds = 0;
+  let frameIndex = 0;
+  
   if ((state.usingExactMode || state.wsModule) && state.fps && state.frameIndex !== undefined) {
-    // Frame-based timecode: frameIndex / fps
-    timecodeSeconds = state.frameIndex / state.fps;
+    // Frame-based timecode: frameIndex / fps (round frame index to integer)
+    frameIndex = Math.round(state.frameIndex);
+    timecodeSeconds = frameIndex / state.fps;
   } else if (v && v.currentTime !== undefined) {
     timecodeSeconds = v.currentTime || 0;
+    // Calculate frame from video time (round to nearest frame)
+    if (state.fps) {
+      frameIndex = Math.round(timecodeSeconds * state.fps);
+    }
   } else if (state.fps && state.frameIndex !== undefined) {
     // Fallback: use frame index if available
-    timecodeSeconds = state.frameIndex / state.fps;
+    frameIndex = Math.round(state.frameIndex);
+    timecodeSeconds = frameIndex / state.fps;
   }
   
   if (els.tc) els.tc.textContent = formatTimecode(timecodeSeconds, state.fps || 30);
-  if (els.frame) els.frame.textContent = (state.frameIndex !== undefined ? state.frameIndex : 0).toString();
+  if (els.frame) els.frame.textContent = Math.round(frameIndex).toString();
   if (els.mode) els.mode.textContent = state.usingExactMode ? 'Exact (Server)' : (state.wsModule ? 'WebSocket' : 'Video Element');
   if (els.metaName) {
     els.metaName.textContent = state.fileName || '-';
