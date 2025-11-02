@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "mediainfo.js": "^0.3.6"
+  }
+}

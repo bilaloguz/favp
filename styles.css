@@ -1,0 +1,322 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --panel: #121821;
+  --text: #e6eef7;
+  --muted: #96a2b2;
+  --accent: #5cc8ff;
+  --accent-2: #9bffb8;
+  --border: #1c2430;
+  --hover: rgba(92, 200, 255, 0.1);
+  --active: rgba(92, 200, 255, 0.2);
+}
+
+* { 
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body { 
+  height: 100%; 
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#app { 
+  max-width: 1200px; 
+  margin: 0 auto; 
+  padding: 20px;
+  min-height: 100vh;
+}
+
+header { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+header > div {
+  text-align: right;
+}
+
+h1 { 
+  font-size: 28px; 
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.controls-row { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  flex-wrap: wrap; 
+}
+
+button, .file-input span {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+button:disabled { 
+  opacity: 0.4; 
+  cursor: not-allowed;
+  background: var(--bg);
+}
+
+button:hover:not(:disabled), .file-input:hover span { 
+  background: var(--hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(92, 200, 255, 0.15);
+}
+
+button:active:not(:disabled), .file-input:active span {
+  transform: translateY(0);
+  background: var(--active);
+}
+
+button:focus-visible, .file-input:focus-within span { 
+  outline: 2px solid var(--accent); 
+  outline-offset: 2px;
+}
+
+.file-input { 
+  position: relative; 
+  overflow: hidden;
+}
+
+.file-input input { 
+  position: absolute; 
+  inset: 0; 
+  width: 100%; 
+  height: 100%; 
+  opacity: 0; 
+  cursor: pointer;
+  font-size: 0;
+}
+
+label.fps-input, label.frame-input { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 8px; 
+  background: var(--panel); 
+  border: 1px solid var(--border); 
+  padding: 8px 12px; 
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+label.fps-input:hover, label.frame-input:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+
+label.fps-input:focus-within, label.frame-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(92, 200, 255, 0.15);
+}
+
+label.fps-input span, label.frame-input span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+label.fps-input input, label.frame-input input { 
+  width: 90px; 
+  background: transparent; 
+  border: none; 
+  color: var(--text); 
+  outline: none;
+  font-size: 14px;
+}
+
+label.fps-input input::placeholder, label.frame-input input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+main { 
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.content-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  justify-content: center;
+}
+
+.stage {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  width: 960px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+video, canvas { 
+  width: 960px; 
+  height: 540px; 
+  display: block; 
+  object-fit: contain;
+  border-radius: 12px;
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+
+.timeline { 
+  width: 1200px;
+  max-width: 100%;
+  height: 10px; 
+  margin: 0;
+  background: #1a2230; 
+  border: 1px solid var(--border); 
+  border-radius: 999px; 
+  position: relative; 
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timeline:hover { 
+  height: 12px;
+  box-shadow: 0 0 0 2px rgba(255, 138, 0, 0.2) inset;
+}
+
+.timeline:active {
+  box-shadow: 0 0 0 2px rgba(255, 138, 0, 0.3) inset;
+}
+
+.timeline-progress { 
+  position: absolute; 
+  left: 0; 
+  top: 0; 
+  bottom: 0; 
+  width: 0%; 
+  background: linear-gradient(90deg, #ff8a00, #ffa94d, #ffc470);
+  border-radius: 999px;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px rgba(255, 138, 0, 0.5);
+}
+
+.hidden { 
+  display: none; 
+}
+
+.hud {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px 20px;
+  border-radius: 12px;
+  color: var(--muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.hud > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hud > div:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.hud strong { 
+  color: var(--text); 
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.hud span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls-bottom { 
+  width: 1200px;
+  max-width: 100%;
+  margin: 0;
+  display: flex; 
+  justify-content: center;
+}
+
+.controls-bottom .controls-row { 
+  background: var(--panel); 
+  border: 1px solid var(--border); 
+  padding: 10px 14px; 
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.meta { 
+  color: var(--muted); 
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.meta span {
+  color: var(--text);
+  font-weight: 500;
+}
+
+footer { 
+  margin-top: 20px; 
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}

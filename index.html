@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FAVP - Frame Accurate Video Player</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>FAVP</h1>
+            <div style="color: var(--muted); font-size: 12px;">Frame Accurate Video Player</div>
+        </header>
+
+        <main>
+            <div class="content-wrapper">
+                <div class="hud">
+                    <div class="meta">
+                        <strong>File:</strong> <span id="metaName">-</span><br/>
+                        <strong>Resolution:</strong> <span id="metaRes">-</span><br/>
+                        <strong>Duration:</strong> <span id="metaDur">-</span>
+                    </div>
+                    <div><strong>Timecode:</strong> <span id="tc">00:00:00:00</span></div>
+                    <div><strong>Frame:</strong> <span id="frame">0</span></div>
+                </div>
+                <div class="stage">
+                    <video id="video" crossorigin="anonymous" playsinline></video>
+                    <canvas id="canvas" class="hidden"></canvas>
+                </div>
+            </div>
+            <div id="timeline" class="timeline" title="Click to seek">
+                <div id="timelineProgress" class="timeline-progress"></div>
+            </div>
+            <div class="controls-bottom">
+                <div class="controls-row">
+                    <label class="file-input">
+                        <input id="fileInput" type="file" accept="video/*" />
+                        <span title="Open a local video file">Open Video</span>
+                    </label>
+                    <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
+                    <button id="btnPrevFrame" title="Previous Frame (J or ←)" disabled>◀ Prev</button>
+                    <button id="btnNextFrame" title="Next Frame (L or →)" disabled>Next ▶</button>
+                    <label class="frame-input">
+                        <span>Go to frame</span>
+                        <input id="frameInput" type="number" min="0" />
+                        <button id="btnGoFrame" title="Enter" disabled>Go</button>
+                    </label>
+                </div>
+            </div>
+        </main>
+
+        
+    </div>
+
+    <!-- hls.js for HLS playback support -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script type="module" src="./src/player.js"></script>
+</body>
+<!--
+Notes:
+- Exact mode is heavy; it is lazy-loaded on demand.
+- Firefox is the target; requestVideoFrameCallback is used for stepping.
+-->
+</html>
+
+
