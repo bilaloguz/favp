@@ -57,25 +57,29 @@ function updateHUD() {
   const fpsValue = state.fps ? Number(state.fps).toFixed(3) : 'auto';
   if (els.fps) els.fps.textContent = fpsValue;
   
-  // Calculate timecode based on frame index in exact mode, or video currentTime otherwise
+  // Calculate timecode based on frame index if available (WebSocket mode or exact mode), or video currentTime otherwise
   let timecodeSeconds = 0;
-  if (state.usingExactMode && state.fps && state.frameIndex !== undefined) {
+  if ((state.usingExactMode || state.wsModule) && state.fps && state.frameIndex !== undefined) {
     // Frame-based timecode: frameIndex / fps
     timecodeSeconds = state.frameIndex / state.fps;
-  } else {
+  } else if (v && v.currentTime !== undefined) {
     timecodeSeconds = v.currentTime || 0;
+  } else if (state.fps && state.frameIndex !== undefined) {
+    // Fallback: use frame index if available
+    timecodeSeconds = state.frameIndex / state.fps;
   }
   
   if (els.tc) els.tc.textContent = formatTimecode(timecodeSeconds, state.fps || 30);
-  if (els.frame) els.frame.textContent = state.frameIndex.toString();
-  if (els.mode) els.mode.textContent = state.usingExactMode ? 'Exact (Server)' : 'Video Element';
+  if (els.frame) els.frame.textContent = (state.frameIndex !== undefined ? state.frameIndex : 0).toString();
+  if (els.mode) els.mode.textContent = state.usingExactMode ? 'Exact (Server)' : (state.wsModule ? 'WebSocket' : 'Video Element');
   if (els.metaName) {
     els.metaName.textContent = state.fileName || '-';
     els.metaRes.textContent = state.width && state.height ? `${state.width}×${state.height}` : '-';
     els.metaDur.textContent = state.duration ? formatTimecode(state.duration, state.fps || 30) : '-';
   }
   if (els.timelineProgress && state.totalFrames && state.totalFrames > 1) {
-    const pct = (state.frameIndex / (state.totalFrames - 1)) * 100;
+    const frameIndex = state.frameIndex !== undefined ? state.frameIndex : 0;
+    const pct = (frameIndex / (state.totalFrames - 1)) * 100;
     els.timelineProgress.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   }
 }
@@ -98,7 +102,7 @@ function loadFile(file) {
 // rVFC-based FPS estimation removed; we rely on MediaInfo or decoded frames
 
 function getFrameDuration() {
-  const fps = Number(els.fpsInput.value) || state.fps || 30;
+  const fps = state.fps || 30;
   return 1 / fps;
 }
 
@@ -108,47 +112,36 @@ async function exactModeLazyLoad() {
   await module.enableExactMode(els, state, updateHUD);
 }
 
-async function goToFrame(targetFrame) {
-  // In server mode, jump by stepping delta frames
-  const module = await import('./server-mode.js');
-  const delta = Math.floor(targetFrame) - state.frameIndex;
-  if (delta !== 0) {
-    await module.stepExact(delta);
-    updateHUD();
+async function stepFrames(delta) {
+  if (state.wsModule) {
+    state.wsModule.step(delta);
+  } else {
+    const target = Math.max(0, state.frameIndex + delta);
+    await goToFrame(target);
   }
 }
 
-// Removed rVFC-based wait helper
-
-async function stepFrames(delta) {
-  if (state.usingExactMode) {
-    // server mode module overrides stepping internally (renders to canvas)
-    const module = await import('./server-mode.js');
-    await module.stepExact(delta);
-    updateHUD();
-    return;
+async function goToFrame(target) {
+  if (state.wsModule) {
+    state.wsModule.setFrame(target);
   }
-
-  const target = Math.max(0, state.frameIndex + delta);
-  await goToFrame(target);
 }
 
 function onPlayPause() {
-  // Drive server mode playback instead of <video>
-  (async () => {
-    try {
-      const module = await import('./server-mode.js');
-      // Toggle state by checking button label
-      const shouldPlay = els.btnPlayPause.textContent === 'Play';
-      if (shouldPlay) {
-        module.playExact(state);
-        els.btnPlayPause.textContent = 'Pause';
-      } else {
-        module.pauseExact();
-        els.btnPlayPause.textContent = 'Play';
-      }
-    } catch (_) {}
-  })();
+  // Drive WebSocket mode playback instead of <video>
+  if (state.wsModule) {
+    const shouldPlay = els.btnPlayPause.textContent === 'Play';
+    if (shouldPlay) {
+      state.wsModule.play();
+      els.btnPlayPause.textContent = 'Pause';
+    } else {
+      state.wsModule.pause();
+      els.btnPlayPause.textContent = 'Play';
+    }
+  } else {
+    // Fallback - should not happen if init worked
+    console.warn('[FAVP] WebSocket module not initialized');
+  }
 }
 
 function attachVideoCallbacks() {
@@ -198,19 +191,44 @@ function wireUI() {
       }
     })();
 
-    // Always enable server-side decoding automatically
+    // Always enable WebSocket mode automatically
     try {
-      const module = await import('./server-mode.js');
-      await module.enableServerMode(els, state, updateHUD);
-      if (!state.totalFrames) {
-        if (typeof module.getExactTotalFrames === 'function') {
-          state.totalFrames = module.getExactTotalFrames();
-          updateHUD();
-        }
+      const module = await import('./ws-mode.js');
+      const wsModule = await module.enableWebSocketMode(els, state, updateHUD);
+      
+      // Upload file to server
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      
+      const uploadResp = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!uploadResp.ok) {
+        throw new Error(`Upload failed: ${uploadResp.status}`);
       }
+      
+      const uploadResult = await uploadResp.json();
+      console.log('[FAVP] Upload result:', uploadResult);
+      
+      // Update state from upload result
+      state.totalFrames = uploadResult.total_frames || 0;
+      state.fps = uploadResult.fps;
+      state.duration = uploadResult.duration || 0;
+      if (uploadResult.width) state.width = uploadResult.width;
+      if (uploadResult.height) state.height = uploadResult.height;
+      
+      // Initialize WebSocket connection
+      await wsModule.init(uploadResult.session_id);
+      
+      // Store module reference for controls
+      state.wsModule = wsModule;
+      
+      updateHUD();
     } catch (e) {
-      console.error('[FAVP] Server mode failed:', e);
-      // If server mode fails, keep UI usable
+      console.error('[FAVP] WebSocket mode failed:', e);
+      // If WebSocket mode fails, keep UI usable
     }
   });
 
@@ -218,21 +236,42 @@ function wireUI() {
   els.btnPrevFrame.addEventListener('click', () => stepFrames(-1));
   els.btnNextFrame.addEventListener('click', () => stepFrames(1));
 
-  els.fpsInput.addEventListener('change', () => {
-    // manual override
-    if (Number(els.fpsInput.value)) {
-      state.fps = Number(els.fpsInput.value);
-    } else {
-      // revert to auto
-      // will re-estimate next time metadata loads, keep current
-    }
-    updateHUD();
-  });
+  // FPS input removed from UI, but keep code in case we add it back
+  if (els.fpsInput) {
+    els.fpsInput.addEventListener('change', () => {
+      // manual override
+      if (Number(els.fpsInput.value)) {
+        state.fps = Number(els.fpsInput.value);
+      } else {
+        // revert to auto
+        // will re-estimate next time metadata loads, keep current
+      }
+      updateHUD();
+    });
+  }
 
   els.btnGoFrame.addEventListener('click', async () => {
     const n = Number(els.frameInput.value);
-    if (!Number.isFinite(n) || n < 0) return;
-    await goToFrame(Math.floor(n));
+    if (!Number.isFinite(n) || n < 0) {
+      console.warn('[FAVP] Invalid frame number:', els.frameInput.value);
+      return;
+    }
+    const targetFrame = Math.floor(n);
+    console.log('[FAVP] Going to frame:', targetFrame);
+    await goToFrame(targetFrame);
+  });
+  
+  // Also support Enter key in frame input
+  els.frameInput.addEventListener('keydown', async (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const n = Number(els.frameInput.value);
+      if (Number.isFinite(n) && n >= 0) {
+        const targetFrame = Math.floor(n);
+        console.log('[FAVP] Going to frame (Enter):', targetFrame);
+        await goToFrame(targetFrame);
+      }
+    }
   });
 
   // Keyboard shortcuts
@@ -277,13 +316,24 @@ function init() {
       const rect = els.timeline.getBoundingClientRect();
       const x = ev.clientX - rect.left;
       const ratio = Math.max(0, Math.min(1, x / rect.width));
-      try {
-        const module = await import('./server-mode.js');
-        if (typeof module.seekExactToFraction === 'function') {
-          module.seekExactToFraction(ratio);
-        }
+      
+      // Calculate target frame based on click position
+      const targetFrame = Math.floor(ratio * (state.totalFrames - 1));
+      
+      // Use WebSocket mode if available
+      if (state.wsModule) {
+        state.wsModule.setFrame(targetFrame);
         updateHUD();
-      } catch (_) {}
+      } else {
+        // Fallback to server-mode if ws-mode not available
+        try {
+          const module = await import('./server-mode.js');
+          if (typeof module.seekExactToFraction === 'function') {
+            module.seekExactToFraction(ratio);
+          }
+          updateHUD();
+        } catch (_) {}
+      }
     });
   }
   // UI sync loop to ensure timeline reflects current frame

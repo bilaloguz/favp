@@ -5,16 +5,20 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
+import json
+import base64
+from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor
 
 from backend.decoder import (
     probe_video, decode_video, get_frame_path, get_session_info, cleanup_session, decode_frame_range,
-    generate_hls_segments, get_hls_info
+    generate_hls_segments, get_hls_info, decode_frame_to_jpeg, decode_frames_progressive, _playback_state
 )
 
 
@@ -33,6 +37,9 @@ app = FastAPI(title="FAVP Server")
 
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# Thread pool executor for running blocking decode operations (optimized)
+executor = ThreadPoolExecutor(max_workers=5)  # More workers for aggressive parallel buffering
 
 # Cleanup old temp files (older than 1 hour)
 def cleanup_old_sessions(max_age_seconds: int = 3600):
@@ -442,6 +449,124 @@ def mediainfo_auto_wasm():
     if not p:
         return JSONResponse({"error": "MediaInfo WASM not found"}, status_code=404)
     return FileResponse(str(p), media_type="application/wasm")
+
+
+@app.websocket("/api/ws/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for control commands only (HLS handles video streaming)"""
+    await websocket.accept()
+    logger.info(f"[WS] Client connected for session {session_id}")
+    
+    # Initialize playback state for this session
+    if session_id not in _playback_state:
+        _playback_state[session_id] = {
+            "current_frame": 0,
+            "is_playing": False,
+        }
+    
+    state = _playback_state[session_id]
+    session_info = get_session_info(session_id)
+    
+    if not session_info:
+        await websocket.send_json({"type": "error", "message": "Session not found"})
+        await websocket.close()
+        return
+    
+    fps = session_info.get("fps", 30.0)
+    total_frames = session_info.get("total_frames", 0)
+    
+    # Send initial state on connection
+    await websocket.send_json({
+        "type": "state",
+        "current_frame": state["current_frame"],
+        "is_playing": state["is_playing"],
+        "total_frames": total_frames,
+        "fps": fps
+    })
+    
+    # Handle control commands in a loop
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_json()
+            action = data.get("action")
+            
+            if action == "play":
+                state["is_playing"] = True
+                await websocket.send_json({
+                    "type": "state",
+                    "is_playing": True,
+                    "current_frame": state["current_frame"]
+                })
+                logger.info(f"[WS] Play command received for session {session_id}")
+                
+            elif action == "pause":
+                state["is_playing"] = False
+                await websocket.send_json({
+                    "type": "state",
+                    "is_playing": False,
+                    "current_frame": state["current_frame"]
+                })
+                logger.info(f"[WS] Pause command received for session {session_id}")
+                
+            elif action == "seek":
+                target_frame = int(data.get("frame", 0))
+                target_frame = max(0, min(target_frame, total_frames - 1))
+                state["current_frame"] = target_frame
+                state["is_playing"] = False  # Pause on seek
+                
+                await websocket.send_json({
+                    "type": "state",
+                    "current_frame": target_frame,
+                    "is_playing": False
+                })
+                logger.info(f"[WS] Seek command received for session {session_id}: frame {target_frame}")
+                
+            elif action == "next_frame":
+                current_frame = state["current_frame"]
+                next_frame = min(current_frame + 1, total_frames - 1)
+                state["current_frame"] = next_frame
+                state["is_playing"] = False  # Pause on step
+                
+                await websocket.send_json({
+                    "type": "state",
+                    "current_frame": next_frame,
+                    "is_playing": False
+                })
+                
+            elif action == "prev_frame":
+                current_frame = state["current_frame"]
+                prev_frame = max(current_frame - 1, 0)
+                state["current_frame"] = prev_frame
+                state["is_playing"] = False  # Pause on step
+                
+                await websocket.send_json({
+                    "type": "state",
+                    "current_frame": prev_frame,
+                    "is_playing": False
+                })
+                
+            elif action == "update_frame":
+                # Client sends frame updates during HLS playback
+                frame = int(data.get("frame", state["current_frame"]))
+                frame = max(0, min(frame, total_frames - 1))
+                state["current_frame"] = frame
+                # No response needed, just update state
+                
+            else:
+                logger.warning(f"[WS] Unknown action: {action}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown action: {action}"
+                })
+                    
+    except WebSocketDisconnect:
+        logger.info(f"[WS] Client disconnected for session {session_id}")
+        state["is_playing"] = False
+    except Exception as e:
+        logger.error(f"[WS] Error in WebSocket handler: {e}")
+        state["is_playing"] = False
+        await websocket.close()
 
 
 # Serve the project root (index.html and assets). html=True makes index.html default

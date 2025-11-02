@@ -15,18 +15,26 @@
 
         <main>
             <div class="content-wrapper">
-                <div class="hud">
-                    <div class="meta">
-                        <strong>File:</strong> <span id="metaName">-</span><br/>
-                        <strong>Resolution:</strong> <span id="metaRes">-</span><br/>
-                        <strong>Duration:</strong> <span id="metaDur">-</span>
+                <div class="hud-panel">
+                    <div class="hud">
+                        <div class="meta">
+                            <strong>File:</strong> <span id="metaName">-</span><br/>
+                            <strong>Resolution:</strong> <span id="metaRes">-</span><br/>
+                            <strong>Duration:</strong> <span id="metaDur">-</span>
+                        </div>
+                        <div><strong>Timecode:</strong> <span id="tc">00:00:00:00</span></div>
+                        <div><strong>Frame:</strong> <span id="frame">0</span></div>
                     </div>
-                    <div><strong>Timecode:</strong> <span id="tc">00:00:00:00</span></div>
-                    <div><strong>Frame:</strong> <span id="frame">0</span></div>
+                    <div class="hud-controls">
+                        <label class="file-input">
+                            <input id="fileInput" type="file" accept="video/*" />
+                            <span title="Open a local video file">Open Video</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="stage">
-                    <video id="video" crossorigin="anonymous" playsinline></video>
-                    <canvas id="canvas" class="hidden"></canvas>
+                    <canvas id="canvas"></canvas>
+                    <video id="video" class="hidden" crossorigin="anonymous" playsinline></video>
                 </div>
             </div>
             <div id="timeline" class="timeline" title="Click to seek">
@@ -34,13 +42,11 @@
             </div>
             <div class="controls-bottom">
                 <div class="controls-row">
-                    <label class="file-input">
-                        <input id="fileInput" type="file" accept="video/*" />
-                        <span title="Open a local video file">Open Video</span>
-                    </label>
-                    <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
                     <button id="btnPrevFrame" title="Previous Frame (J or ←)" disabled>◀ Prev</button>
+                    <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
                     <button id="btnNextFrame" title="Next Frame (L or →)" disabled>Next ▶</button>
+                </div>
+                <div class="frame-seek-control">
                     <label class="frame-input">
                         <span>Go to frame</span>
                         <input id="frameInput" type="number" min="0" />
@@ -53,7 +59,6 @@
         
     </div>
 
-    <!-- hls.js for HLS playback support -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script type="module" src="./src/player.js"></script>
 </body>

@@ -179,6 +179,7 @@ main {
   justify-content: center;
 }
 
+
 .stage {
   position: relative;
   background: transparent;
@@ -243,6 +244,14 @@ video, canvas {
   display: none; 
 }
 
+.hud-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
 .hud {
   position: relative;
   display: flex;
@@ -254,8 +263,44 @@ video, canvas {
   border-radius: 12px;
   color: var(--muted);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  min-width: 200px;
-  flex-shrink: 0;
+}
+
+.hud-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.hud-controls .file-input {
+  width: 100%;
+}
+
+.hud-controls .file-input span {
+  width: 100%;
+  text-align: center;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0f14;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(92, 200, 255, 0.3);
+  transition: all 0.2s ease;
+  display: block;
+}
+
+.hud-controls .file-input:hover span {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(92, 200, 255, 0.4);
+  background: linear-gradient(135deg, #6dd4ff, #b0ffd4);
+}
+
+.hud-controls .file-input:active span {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(92, 200, 255, 0.3);
 }
 
 .hud > div {
@@ -291,8 +336,10 @@ video, canvas {
   width: 1200px;
   max-width: 100%;
   margin: 0;
-  display: flex; 
-  justify-content: center;
+  display: grid; 
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
 }
 
 .controls-bottom .controls-row { 
@@ -301,6 +348,20 @@ video, canvas {
   padding: 10px 14px; 
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  gap: 8px;
+  justify-self: center;
+  grid-column: 2;
+}
+
+.frame-seek-control {
+  grid-column: 3;
+  justify-self: end;
+  flex-shrink: 0;
+}
+
+.frame-seek-control .frame-input {
+  margin: 0;
 }
 
 .meta { 

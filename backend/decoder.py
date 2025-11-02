@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional
+from io import BytesIO
+import base64
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +17,9 @@ _frame_cache: Dict[str, dict] = {}
 
 # Global cache: session_id -> HLS segments info
 _hls_cache: Dict[str, dict] = {}
+
+# Global state for WebSocket playback sessions: session_id -> playback state
+_playback_state: Dict[str, dict] = {}
 
 
 def get_ffmpeg_path() -> Optional[str]:
@@ -403,13 +408,13 @@ def generate_hls_segments(video_path: Path, session_id: str, segment_duration: f
     
     # Generate HLS segments with 1-second duration
     # Use -hls_segment_filename to control segment naming
+    # Optimize for speed: try copy codec first (no re-encoding), fallback to fast encoding
     hls_cmd = [
         ffmpeg,
         "-i", str(video_path),
-        "-c:v", "libx264",  # H.264 encoding
-        "-c:a", "aac",      # AAC audio (if present)
-        "-preset", "fast",  # Faster encoding
-        "-crf", "23",       # Good quality
+        "-c:v", "copy",     # Try copying video stream (no re-encoding) - much faster
+        "-c:a", "copy",     # Try copying audio stream (no re-encoding)
+        "-bsf:v", "h264_mp4toannexb",  # Convert H.264 to annex B for TS
         "-hls_time", str(segment_duration),
         "-hls_list_size", "0",  # Include all segments in playlist
         "-hls_segment_type", "mpegts",  # Use MPEG-TS format
@@ -465,6 +470,112 @@ def get_hls_info(session_id: str) -> Optional[dict]:
     return _hls_cache.get(session_id)
 
 
+def decode_frame_to_jpeg(session_id: str, frame_index: int, quality: int = 85) -> bytes:
+    """Decode a specific frame to JPEG bytes (for WebSocket streaming)"""
+    if session_id not in _frame_cache:
+        raise RuntimeError("Session not found")
+    
+    cache = _frame_cache[session_id]
+    video_path = Path(cache.get("video_path"))
+    
+    if not video_path or not video_path.exists():
+        raise RuntimeError("Video file not found")
+    
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        raise RuntimeError("FFmpeg not found")
+    
+    # Decode frame directly to JPEG in memory
+    # Quality: 2-31 for JPEG (lower = better), ~18 = 85% quality
+    qvalue = max(2, min(31, quality))
+    extract_cmd = [
+        ffmpeg,
+        "-i", str(video_path),
+        "-vf", f"select=eq(n\\,{frame_index})",
+        "-frames:v", "1",
+        "-f", "image2pipe",
+        "-vcodec", "mjpeg",
+        "-q:v", str(qvalue),
+        "-",
+    ]
+    
+    try:
+        result = subprocess.run(extract_cmd, capture_output=True, check=True, timeout=10)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if isinstance(e.stderr, bytes) else str(e))
+        logger.error(f"[Decoder] Failed to decode frame {frame_index}: {err_msg}")
+        raise RuntimeError(f"Failed to decode frame {frame_index}: {err_msg}")
+
+
+def decode_frames_progressive(session_id: str, start_frame: int, buffer_seconds: float = 2.0) -> list:
+    """
+    Decode a progressive buffer of frames starting from start_frame.
+    Returns list of (frame_index, jpeg_bytes) tuples.
+    """
+    if session_id not in _frame_cache:
+        raise RuntimeError("Session not found")
+    
+    cache = _frame_cache[session_id]
+    fps = cache.get("fps", 30.0)
+    total_frames = cache.get("total_frames", 0)
+    video_path = Path(cache.get("video_path"))
+    
+    if not video_path or not video_path.exists():
+        raise RuntimeError("Video file not found")
+    
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        raise RuntimeError("FFmpeg not found")
+    
+    # Calculate buffer size in frames
+    buffer_frames = int(buffer_seconds * fps)
+    end_frame = min(start_frame + buffer_frames - 1, total_frames - 1)
+    
+    if end_frame < start_frame:
+        return []
+    
+    # Decode range of frames to JPEG in memory
+    extract_cmd = [
+        ffmpeg,
+        "-i", str(video_path),
+        "-vf", f"select='between(n\\,{start_frame}\\,{end_frame})'",
+        "-vsync", "0",
+        "-f", "image2pipe",
+        "-vcodec", "mjpeg",
+        "-q:v", "18",  # ~85% JPEG quality
+        "-",
+    ]
+    
+    try:
+        result = subprocess.run(extract_cmd, capture_output=True, check=True, timeout=30)
+        jpeg_data = result.stdout
+        
+        # Split JPEG data by JPEG marker (0xFF 0xD8 = start of JPEG, 0xFF 0xD9 = end)
+        frames = []
+        current_frame_start = None
+        i = 0
+        while i < len(jpeg_data) - 1:
+            if jpeg_data[i] == 0xFF and jpeg_data[i + 1] == 0xD8:  # JPEG start
+                if current_frame_start is not None:
+                    # Save previous frame
+                    frame_idx = start_frame + len(frames)
+                    frames.append((frame_idx, jpeg_data[current_frame_start:i]))
+                current_frame_start = i
+            elif jpeg_data[i] == 0xFF and jpeg_data[i + 1] == 0xD9 and current_frame_start is not None:  # JPEG end
+                frame_idx = start_frame + len(frames)
+                frames.append((frame_idx, jpeg_data[current_frame_start:i + 2]))
+                current_frame_start = None
+            i += 1
+        
+        logger.debug(f"[Decoder] Decoded {len(frames)} frames ({start_frame}-{end_frame}) for session {session_id}")
+        return frames
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if isinstance(e.stderr, bytes) else str(e))
+        logger.error(f"[Decoder] Failed to decode progressive frames: {err_msg}")
+        raise RuntimeError(f"Failed to decode progressive frames: {err_msg}")
+
+
 def cleanup_session(session_id: str) -> None:
     """Cleanup temp files for a session"""
     if session_id not in _frame_cache:
@@ -480,4 +591,5 @@ def cleanup_session(session_id: str) -> None:
             logger.warning(f"[Decoder] Cleanup warning: {e}")
     _frame_cache.pop(session_id, None)
     _hls_cache.pop(session_id, None)
+    _playback_state.pop(session_id, None)
 
