@@ -15,7 +15,9 @@ A frame-accurate HTML5 video player with HLS streaming support, designed for pre
 
 - **Python 3.8+** with FastAPI
 - **FFmpeg** - Must be installed and available in system PATH
-- **Modern web browser** - Chrome, Firefox, Edge, or Safari with HLS support
+- **Modern web browser** - Chrome, Firefox with HLS support
+
+  **I intentionally do not care about Ap*le products like S**ari. If you like or praise such products, please leave this page immediatley.**
 
 ## Installation
 
