@@ -41,15 +41,65 @@ const state = {
 };
 
 function formatTimecode(timeSeconds, fps) {
-  const totalFrames = Math.max(0, Math.round(timeSeconds * (fps || 30)));
-  const frames = totalFrames % (fps || 30);
-  const totalSeconds = Math.floor(totalFrames / (fps || 30));
+  // Ensure timeSeconds is a valid number and round to prevent floating point errors
+  const roundedTime = Number(timeSeconds) || 0;
+  const fpsValue = Number(fps) || 30;
+  
+  // Calculate total frames (round to integer) - this is the absolute frame number
+  const totalFrames = Math.max(0, Math.round(roundedTime * fpsValue));
+  
+  // Calculate total seconds (integer)
+  const totalSeconds = Math.floor(totalFrames / fpsValue);
+  
+  // Extract frame number within current second
+  // Calculate frames as: totalFrames - (seconds * fps)
+  // IMPORTANT: Use integer arithmetic to avoid floating point precision issues
+  const fpsInt = Math.floor(fpsValue);
+  const frameInSecond = totalFrames - (totalSeconds * fpsInt);
+  
+  // Calculate frame number - must be integer
+  let frames = Math.round(frameInSecond);
+  
+  // Clamp to valid range (0 to fps-1)
+  if (frames < 0) {
+    frames = 0;
+  } else if (frames >= fpsInt) {
+    frames = frames % fpsInt;
+  }
+  
+  // Convert to integer using multiple methods to ensure no decimals
+  frames = Math.floor(Math.abs(frames));
+  // Force integer by converting to string and parsing integer part
+  const framesInt = parseInt(String(frames).split('.')[0], 10);
+  const finalFrames = isNaN(framesInt) ? 0 : Math.floor(framesInt);
+  
   const s = totalSeconds % 60;
   const m = Math.floor(totalSeconds / 60) % 60;
   const h = Math.floor(totalSeconds / 3600);
-  const pad = (n) => String(n).padStart(2, '0');
-  const padF = (n) => String(n).padStart(2, '0');
-  return `${pad(h)}:${pad(m)}:${pad(s)}:${padF(frames)}`;
+  
+  const pad = (n) => {
+    const num = Math.floor(Math.abs(Number(n)));
+    const str = String(num);
+    return str.split('.')[0].padStart(2, '0');
+  };
+  
+  // Format frame number - ensure it's absolutely an integer string with no decimals
+  const framesFormatted = (() => {
+    // Convert finalFrames to integer multiple ways
+    const intVal = Math.floor(Math.abs(finalFrames));
+    const intStr = String(intVal).split('.')[0];
+    const intNum = parseInt(intStr, 10);
+    const finalInt = isNaN(intNum) ? 0 : Math.floor(intNum);
+    // Return as zero-padded string with exactly 2 digits
+    return String(finalInt).padStart(2, '0');
+  })();
+  
+  // Build timecode string explicitly - no template interpolation for frame part
+  const hStr = pad(h);
+  const mStr = pad(m);
+  const sStr = pad(s);
+  
+  return hStr + ':' + mStr + ':' + sStr + ':' + framesFormatted;
 }
 
 function updateHUD() {
@@ -63,22 +113,27 @@ function updateHUD() {
   
   if ((state.usingExactMode || state.wsModule) && state.fps && state.frameIndex !== undefined) {
     // Frame-based timecode: frameIndex / fps (round frame index to integer)
-    frameIndex = Math.round(state.frameIndex);
+    frameIndex = Math.max(0, Math.round(state.frameIndex));
     timecodeSeconds = frameIndex / state.fps;
   } else if (v && v.currentTime !== undefined) {
-    timecodeSeconds = v.currentTime || 0;
+    timecodeSeconds = Number(v.currentTime) || 0;
     // Calculate frame from video time (round to nearest frame)
     if (state.fps) {
-      frameIndex = Math.round(timecodeSeconds * state.fps);
+      frameIndex = Math.max(0, Math.round(timecodeSeconds * state.fps));
+      // Recalculate timecode from rounded frame to ensure consistency
+      timecodeSeconds = frameIndex / state.fps;
     }
   } else if (state.fps && state.frameIndex !== undefined) {
     // Fallback: use frame index if available
-    frameIndex = Math.round(state.frameIndex);
+    frameIndex = Math.max(0, Math.round(state.frameIndex));
     timecodeSeconds = frameIndex / state.fps;
   }
   
+  // Ensure frameIndex is always an integer for display
+  const displayFrame = Math.max(0, Math.round(frameIndex));
+  
   if (els.tc) els.tc.textContent = formatTimecode(timecodeSeconds, state.fps || 30);
-  if (els.frame) els.frame.textContent = Math.round(frameIndex).toString();
+  if (els.frame) els.frame.textContent = displayFrame.toString();
   if (els.mode) els.mode.textContent = state.usingExactMode ? 'Exact (Server)' : (state.wsModule ? 'WebSocket' : 'Video Element');
   if (els.metaName) {
     els.metaName.textContent = state.fileName || '-';
