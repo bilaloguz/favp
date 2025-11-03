@@ -209,7 +209,7 @@ video, canvas {
 .timeline { 
   width: 1200px;
   max-width: 100%;
-  height: 10px; 
+  height: 12.5px; 
   margin: 0;
   background: #1a2230; 
   border: 1px solid var(--border); 
@@ -220,7 +220,7 @@ video, canvas {
 }
 
 .timeline:hover { 
-  height: 12px;
+  height: 15px;
   box-shadow: 0 0 0 2px rgba(255, 138, 0, 0.2) inset;
 }
 
