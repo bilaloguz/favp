@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,10 +15,12 @@ import json
 import base64
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
+from pydantic import BaseModel
 
 from backend.decoder import (
     probe_video, decode_video, get_frame_path, get_session_info, cleanup_session, decode_frame_range,
-    generate_hls_segments, get_hls_info, decode_frame_to_jpeg, decode_frames_progressive, _playback_state
+    generate_hls_segments, get_hls_info, decode_frame_to_jpeg, decode_frames_progressive, _playback_state,
+    generate_subclip
 )
 
 
@@ -381,6 +383,47 @@ async def get_hls_segment(session_id: str, segment_name: str) -> FileResponse:
     
     return FileResponse(str(segment_path), media_type="video/mp2t")
 
+
+class SubclipRequest(BaseModel):
+    in_frame: int
+    out_frame: int
+
+
+@app.post("/api/subclip/{session_id}")
+async def create_subclip(session_id: str, req: SubclipRequest = Body(...)) -> JSONResponse:
+    try:
+        info = generate_subclip(session_id, int(req.in_frame), int(req.out_frame))
+        return JSONResponse({
+            "status": "ok",
+            "url": info["url_path"],
+            "filename": info["filename"],
+            "in_frame": info["in_frame"],
+            "out_frame": info["out_frame"],
+            "fps": info["fps"],
+            "start_time": info["start_time"],
+            "duration": info["duration"],
+        })
+    except Exception as e:
+        logger.error(f"Subclip failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/subclip/{session_id}/{filename}")
+async def download_subclip(session_id: str, filename: str):
+    try:
+        from backend.decoder import _frame_cache
+        if session_id not in _frame_cache:
+            raise HTTPException(status_code=404, detail="Session not found")
+        temp_dir = Path(_frame_cache[session_id]["temp_dir"])  # type: ignore
+        file_path = temp_dir / "subclips" / filename
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(path=str(file_path), filename=filename, media_type='video/mp4')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download subclip failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/session/{session_id}")
 async def delete_session(session_id: str) -> JSONResponse:

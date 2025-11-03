@@ -38,13 +38,19 @@
                 </div>
             </div>
             <div id="timeline" class="timeline" title="Click to seek">
+                <div id="timelineSelection" class="timeline-selection"></div>
                 <div id="timelineProgress" class="timeline-progress"></div>
+            </div>
+            <div id="subclipInfo" style="margin-top:8px;color:var(--muted);font-size:12px;">
+                <!-- temporary debug: in/out and selection info -->
             </div>
             <div class="controls-bottom">
                 <div class="controls-row">
+                    <button id="btnMarkIn" title="Mark In (I)" disabled>In</button>
                     <button id="btnPrevFrame" title="Previous Frame (J or ←)" disabled>◀ Prev</button>
                     <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
                     <button id="btnNextFrame" title="Next Frame (L or →)" disabled>Next ▶</button>
+                    <button id="btnMarkOut" title="Mark Out (O)" disabled>Out</button>
                 </div>
                 <div class="frame-seek-control">
                     <label class="frame-input">
@@ -52,6 +58,7 @@
                         <input id="frameInput" type="number" min="0" />
                         <button id="btnGoFrame" title="Enter" disabled>Go</button>
                     </label>
+                    <button id="btnSubclip" class="subclip-btn" title="Create Subclip" disabled>Subclip</button>
                 </div>
             </div>
         </main>

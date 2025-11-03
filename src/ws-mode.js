@@ -18,6 +18,9 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
   let sessionId = null;
   let fps = sharedState?.fps || null;
   let totalFrames = sharedState?.totalFrames || 0;
+  // Subclip marks
+  let markInFrame = null;
+  let markOutFrame = null;
   
   // Check if HLS.js is loaded
   if (typeof Hls === 'undefined') {
@@ -109,6 +112,8 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       console.error('[FAVP] WebSocket error:', data.message);
       isPlaying = false;
       if (updateHUD) updateHUD();
+      updateSelectionOverlay();
+      updateSelectionOverlay();
     }
   }
   
@@ -120,6 +125,87 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       ws.send(JSON.stringify({ action, ...data }));
     } else {
       console.warn('[FAVP] WebSocket not connected, cannot send command:', action);
+    }
+  }
+
+  /**
+   * Create subclip via backend
+   */
+  async function createSubclip() {
+    if (markInFrame == null || markOutFrame == null) {
+      console.warn('[FAVP] Subclip: in/out not set');
+      return;
+    }
+    if (markOutFrame <= markInFrame) {
+      console.warn('[FAVP] Subclip: out must be after in');
+      return;
+    }
+    if (!sessionId || !fps) {
+      console.warn('[FAVP] Subclip: missing session or fps');
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/subclip/${sessionId}` , {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ in_frame: markInFrame, out_frame: markOutFrame })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`Subclip failed: ${resp.status} ${txt}`);
+      }
+      const data = await resp.json();
+      if (data && data.url) {
+        console.log('[FAVP] Subclip ready:', data.url);
+        // Trigger download/open in new tab
+        window.open(data.url, '_blank');
+      }
+    } catch (e) {
+      console.error('[FAVP] Subclip error:', e);
+    }
+  }
+
+  /**
+   * Update blue selection range on timeline
+   */
+  function updateSelectionOverlay() {
+    const el = elements.timelineSelection || document.getElementById('timelineSelection');
+    const timeline = elements.timeline || document.getElementById('timeline');
+    const info = document.getElementById('subclipInfo');
+    if (!el || !timeline || !totalFrames || totalFrames <= 1) return;
+
+    if (markInFrame == null || markOutFrame == null || markOutFrame <= markInFrame) {
+      el.style.width = '0%';
+      el.style.left = '0%';
+      el.style.display = 'none';
+      if (info) info.textContent = '';
+      return;
+    }
+
+    const startPct = (markInFrame / (totalFrames - 1)) * 100;
+    const endPct = (markOutFrame / (totalFrames - 1)) * 100;
+    const left = Math.max(0, Math.min(100, startPct));
+    const width = Math.max(0, Math.min(100, endPct - startPct));
+    el.style.display = 'block';
+    el.style.left = `${left}%`;
+    el.style.width = `${width}%`;
+
+    // Update textual debug info
+    if (info && fps) {
+      const fmt = (frames) => {
+        const time = Math.max(0, frames) / fps;
+        const totalFrames = Math.round(time * fps);
+        const totalSeconds = Math.floor(totalFrames / fps);
+        const ff = totalFrames - (totalSeconds * Math.floor(fps));
+        const pad2 = (n) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        const f = Math.max(0, Math.min(99, Math.floor(ff)));
+        return `${pad2(h)}:${pad2(m)}:${pad2(s)}:${pad2(f)}`;
+      };
+      const span = Math.max(0, markOutFrame - markInFrame);
+      info.textContent = `In: ${markInFrame} (${fmt(markInFrame)})  |  Out: ${markOutFrame} (${fmt(markOutFrame)})  |  Selected: ${span} frames (${fmt(span)})`;
     }
   }
   
@@ -178,6 +264,11 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       // Hide canvas, show video now that HLS is ready
       if (elements.canvas) elements.canvas.classList.add('hidden');
       if (video) video.classList.remove('hidden');
+      
+      // Enable In/Out/Subclip buttons now that media is ready
+      if (elements.btnMarkIn) elements.btnMarkIn.disabled = false;
+      if (elements.btnMarkOut) elements.btnMarkOut.disabled = false;
+      if (elements.btnSubclip) elements.btnSubclip.disabled = false;
       
       // Setup HLS player with strict level control
       if (Hls.isSupported()) {
@@ -458,6 +549,7 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       }
       
       if (updateHUD) updateHUD();
+      updateSelectionOverlay();
       
       // Seek to target time
       video.currentTime = targetTime;
@@ -506,6 +598,7 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
       }
       
       if (updateHUD) updateHUD();
+      updateSelectionOverlay();
     }
   }
   
@@ -515,6 +608,31 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
   function step(delta) {
     const targetFrame = Math.max(0, Math.min(currentFrame + delta, totalFrames - 1));
     setFrame(targetFrame);
+  }
+
+  /**
+   * Mark In/Out
+   */
+  function markIn() {
+    if (!fps || totalFrames === 0) return;
+    markInFrame = currentFrame;
+    if (elements.btnMarkIn) elements.btnMarkIn.classList.add('active');
+    updateSelectionOverlay();
+  }
+
+  function markOut() {
+    if (!fps || totalFrames === 0) return;
+    markOutFrame = currentFrame;
+    if (elements.btnMarkOut) elements.btnMarkOut.classList.add('active');
+    updateSelectionOverlay();
+  }
+
+  function clearMarks() {
+    markInFrame = null;
+    markOutFrame = null;
+    if (elements.btnMarkIn) elements.btnMarkIn.classList.remove('active');
+    if (elements.btnMarkOut) elements.btnMarkOut.classList.remove('active');
+    updateSelectionOverlay();
   }
   
   /**
@@ -637,6 +755,10 @@ export async function enableWebSocketMode(elements, sharedState, updateHUD) {
     step,
     next,
     prev,
+    markIn,
+    markOut,
+    clearMarks,
+    createSubclip,
     getCurrentFrame: () => currentFrame,
     isPlaying: () => isPlaying,
     disconnect,

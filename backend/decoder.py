@@ -465,6 +465,69 @@ def generate_hls_segments(video_path: Path, session_id: str, segment_duration: f
         raise RuntimeError(f"HLS generation failed: {err_msg}")
 
 
+def generate_subclip(session_id: str, in_frame: int, out_frame: int) -> dict:
+    """Create frame-accurate subclip using FFmpeg (re-encode for accuracy)."""
+    if session_id not in _frame_cache:
+        raise RuntimeError("Session not found - probe video first")
+
+    cache = _frame_cache[session_id]
+    video_path = Path(cache["video_path"]) if cache.get("video_path") else None
+    temp_dir = Path(cache["temp_dir"]) if cache.get("temp_dir") else None
+    fps = float(cache.get("fps") or 30.0)
+    if not video_path or not video_path.exists():
+        raise RuntimeError("Original video path not available")
+    if not temp_dir:
+        raise RuntimeError("Temp directory not available")
+    if in_frame is None or out_frame is None or out_frame <= in_frame:
+        raise RuntimeError("Invalid in/out frames")
+
+    ffmpeg = get_ffmpeg_path()
+    if not ffmpeg:
+        raise RuntimeError("FFmpeg not found. Install FFmpeg: https://ffmpeg.org/download.html")
+
+    # Compute times
+    start_time = max(0.0, in_frame / fps)
+    end_time = max(start_time, out_frame / fps)
+    duration = max(0.0, end_time - start_time)
+
+    # Output path under session temp dir
+    out_dir = temp_dir / "subclips"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"subclip_{in_frame}_{out_frame}.mp4"
+
+    # Use input seek after -i for frame accuracy; re-encode video, copy audio
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i", str(video_path),
+        "-ss", f"{start_time:.6f}",
+        "-t", f"{duration:.6f}",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-c:a", "copy",
+        str(out_file),
+    ]
+
+    try:
+        logger.info(f"[Decoder] Session {session_id}: Generating subclip {in_frame}-{out_frame} -> {out_file}")
+        subprocess.run(cmd, check=True, capture_output=True)
+        return {
+            "path": str(out_file),
+            "url_path": f"/api/subclip/{session_id}/{out_file.name}",
+            "filename": out_file.name,
+            "in_frame": in_frame,
+            "out_frame": out_frame,
+            "fps": fps,
+            "start_time": start_time,
+            "duration": duration,
+        }
+    except subprocess.CalledProcessError as e:
+        err = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode('utf-8', errors='replace') if isinstance(e.stderr, bytes) else str(e))
+        logger.error(f"[Decoder] Subclip error: {err}")
+        raise RuntimeError(f"Subclip generation failed: {err}")
+
+
 def get_hls_info(session_id: str) -> Optional[dict]:
     """Get HLS segments info for a session"""
     return _hls_cache.get(session_id)

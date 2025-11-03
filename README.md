@@ -10,6 +10,7 @@ A frame-accurate HTML5 video player with frame-by-frame navigation.
 - **Frame navigation**: Previous/Next frame buttons and "Go to frame" functionality
 - **Timeline seeking**: Click on timeline to jump to any frame
 - **Keyboard shortcuts**: Space/K for play/pause, J/L or arrows for frame stepping
+- **Subclipping (frame-accurate)**: Mark In/Out, preview selection on timeline (blue), and export subclip
 
 ## Architecture
 
@@ -17,6 +18,7 @@ A frame-accurate HTML5 video player with frame-by-frame navigation.
 - **Backend**: FastAPI server with FFmpeg for video processing
 - **Control**: WebSocket connection for play/pause/seek/next/prev commands
 - **Streaming**: HLS segments generated on-demand with optimized encoding
+- **Subclip export**: FFmpeg re-encodes the selected range for frame-accurate output
 
 ## Setup
 
@@ -43,10 +45,16 @@ uvicorn backend.main:app --reload
 2. Video loads with HLS streaming (first frame shown immediately)
 3. Use controls or keyboard shortcuts to navigate frame by frame
 4. Click timeline to seek to any position
+5. Subclipping:
+   - Buttons order: In, Prev, Play/Pause, Next, Out (Subclip on the right panel)
+   - Shortcuts: I = Mark In, O = Mark Out, J/L or ←/→ for frame step, Space/K play/pause
+   - Blue overlay on timeline shows the selected range
+   - Click "Subclip" to export (downloads an MP4)
 
 ## Technical Details
 
 - HLS segments generated with 1-second duration using FFmpeg copy codec (fast encoding)
 - WebSocket manages playback state and frame synchronization
 - Strict HLS level locking prevents automatic quality switching
-- Frame calculation based on video currentTime and FPS
+- Frame calculation based on FPS and discrete frame indices (rounded)
+- Subclip endpoint: `POST /api/subclip/{session_id}` with `{ in_frame, out_frame }`; download at `GET /api/subclip/{session_id}/{filename}`

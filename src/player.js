@@ -17,6 +17,9 @@ const els = {
   metaName: document.getElementById('metaName'),
   metaRes: document.getElementById('metaRes'),
   metaDur: document.getElementById('metaDur'),
+  btnMarkIn: document.getElementById('btnMarkIn'),
+  btnMarkOut: document.getElementById('btnMarkOut'),
+  btnSubclip: document.getElementById('btnSubclip'),
 };
 
 /**
@@ -216,6 +219,10 @@ function attachVideoCallbacks() {
     state.height = v.videoHeight;
 
     setControlsEnabled(true);
+    // Ensure subclip controls are enabled once media is ready
+    if (els.btnMarkIn) els.btnMarkIn.disabled = false;
+    if (els.btnMarkOut) els.btnMarkOut.disabled = false;
+    if (els.btnSubclip) els.btnSubclip.disabled = false;
     els.btnPlayPause.textContent = v.paused ? 'Play' : 'Pause';
     updateHUD();
   });
@@ -254,6 +261,11 @@ function wireUI() {
       }
     })();
 
+    // Optimistically enable subclip controls immediately on file select
+    if (els.btnMarkIn) els.btnMarkIn.disabled = false;
+    if (els.btnMarkOut) els.btnMarkOut.disabled = false;
+    if (els.btnSubclip) els.btnSubclip.disabled = false;
+
     // Always enable WebSocket mode automatically
     try {
       const module = await import('./ws-mode.js');
@@ -284,6 +296,10 @@ function wireUI() {
       
       // Initialize WebSocket connection
       await wsModule.init(uploadResult.session_id);
+      // Enable new subclip controls once session is initialized
+      if (els.btnMarkIn) els.btnMarkIn.disabled = false;
+      if (els.btnMarkOut) els.btnMarkOut.disabled = false;
+      if (els.btnSubclip) els.btnSubclip.disabled = false;
       
       // Store module reference for controls
       state.wsModule = wsModule;
@@ -298,6 +314,19 @@ function wireUI() {
   els.btnPlayPause.addEventListener('click', onPlayPause);
   els.btnPrevFrame.addEventListener('click', () => stepFrames(-1));
   els.btnNextFrame.addEventListener('click', () => stepFrames(1));
+  // In/Out/Subclip buttons
+  if (els.btnMarkIn) els.btnMarkIn.addEventListener('click', () => {
+    if (state.wsModule && state.wsModule.markIn) state.wsModule.markIn();
+  });
+  if (els.btnMarkOut) els.btnMarkOut.addEventListener('click', () => {
+    if (state.wsModule && state.wsModule.markOut) state.wsModule.markOut();
+  });
+  if (els.btnSubclip) els.btnSubclip.addEventListener('click', async () => {
+    if (!state.wsModule) return;
+    if (state.wsModule.createSubclip) {
+      await state.wsModule.createSubclip();
+    }
+  });
 
   // FPS input removed from UI, but keep code in case we add it back
   if (els.fpsInput) {
@@ -359,6 +388,16 @@ function wireUI() {
       case 'ArrowRight':
         ev.preventDefault();
         await stepFrames(1);
+        break;
+      case 'i':
+      case 'I':
+        ev.preventDefault();
+        if (state.wsModule && state.wsModule.markIn) state.wsModule.markIn();
+        break;
+      case 'o':
+      case 'O':
+        ev.preventDefault();
+        if (state.wsModule && state.wsModule.markOut) state.wsModule.markOut();
         break;
       default:
         break;
