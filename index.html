@@ -35,6 +35,20 @@
                 <div class="stage">
                     <canvas id="canvas"></canvas>
                     <video id="video" class="hidden" crossorigin="anonymous" playsinline></video>
+                    <div class="controls-overlay">
+                        <button id="btnMarkIn" title="Mark In (I)" disabled>[</button>
+                        <button id="btnPrevFrame" title="Previous Frame (J or ←)" disabled>◀</button>
+                        <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
+                        <button id="btnNextFrame" title="Next Frame (L or →)" disabled>▶</button>
+                        <button id="btnMarkOut" title="Mark Out (O)" disabled>]</button>
+                        <div class="overlay-sep"></div>
+                        <label class="frame-input overlay-frame-input">
+                            <span>#</span>
+                            <input id="frameInput" type="number" min="0" />
+                            <button id="btnGoFrame" title="Go to frame (Enter)" disabled>↵</button>
+                        </label>
+                        <button id="btnSubclip" class="subclip-btn overlay-subclip" title="Create Subclip" disabled>✂</button>
+                    </div>
                 </div>
             </div>
             <div id="timeline" class="timeline" title="Click to seek">
@@ -44,23 +58,7 @@
             <div id="subclipInfo" style="margin-top:8px;color:var(--muted);font-size:12px;">
                 <!-- temporary debug: in/out and selection info -->
             </div>
-            <div class="controls-bottom">
-                <div class="controls-row">
-                    <button id="btnMarkIn" title="Mark In (I)" disabled>In</button>
-                    <button id="btnPrevFrame" title="Previous Frame (J or ←)" disabled>◀ Prev</button>
-                    <button id="btnPlayPause" title="Play/Pause (Space or K)" disabled>Play</button>
-                    <button id="btnNextFrame" title="Next Frame (L or →)" disabled>Next ▶</button>
-                    <button id="btnMarkOut" title="Mark Out (O)" disabled>Out</button>
-                </div>
-                <div class="frame-seek-control">
-                    <label class="frame-input">
-                        <span>Go to frame</span>
-                        <input id="frameInput" type="number" min="0" />
-                        <button id="btnGoFrame" title="Enter" disabled>Go</button>
-                    </label>
-                    <button id="btnSubclip" class="subclip-btn" title="Create Subclip" disabled>Subclip</button>
-                </div>
-            </div>
+            <div class="controls-bottom"></div>
         </main>
 
         
